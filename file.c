@@ -33,9 +33,9 @@ static void getUserPath(char **path) {
  int len;
 
  userInformations=getpwuid(getuid());
- len=strlen(userInformations->pw_dir);
- *path=malloc(++len);
- memcpy(*path,userInformations->pw_dir,len+1);
+ len=strlen(userInformations->pw_dir)+1;
+ *path=malloc(len);
+ memcpy(*path,userInformations->pw_dir,len);
 }
 
 static void createPathIfNotExists(char **path) {

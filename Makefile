@@ -1,5 +1,5 @@
-FLAGS:=-Os -march=native -mtune=generic -Wall -DDATE="\"`date +'%Y'`\""
-SRCS=weather.c output.c config.c file.c tcp.c
+FLAGS:=-Os -g -Wall -DDATE="\"`date +'%Y'`\""
+SRCS=weather.c output.c file.c tcp.c string.c
 TARGET=weather-cli
 
 all: $(TARGET)

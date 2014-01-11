@@ -22,7 +22,7 @@
 #define BUFFER_SIZE 1024
 
 #define APP_NAME "weather-cli"
-#define APP_VERSION "1.5"
+#define APP_VERSION "1.6"
 #define APP_HELP " [OPTION]\n\n\
   -s\t\tshort output\n\
   -f\t\tFORMAT\n\
@@ -42,7 +42,7 @@
 #include <sys/param.h>
 #include <unistd.h>
 
-
+#include "string.c"
 #include "output.c"
 #include "tcp.c"
 #include "file.c"
@@ -56,34 +56,56 @@
 #define BIT7 64
 #define BIT8 128
 
-static char *bez[]={"longitude","latitude","city","region","country",
-"humidity","visibility","pressure","rising","sunrise","sunset","current code",
-"current date","current temp","current text","current image","speed","direction",
-"chill","tomorrow day","tomorrow date","tomorrow temp low","tomorrow temp high",
-"tomorrow text","tomorrow code","tomorrow image"};
-
-static char *format[]={"%lo","%la","%lc","%lr","%lR","%hu","%vi","%pr","%ri",
-"%sr","%ss","%cc","%cd","%ct","%cm","%ci","%cws","%cwd","%cwc","%td","%tD",
-"%ttl","%tth","%tT","%tc","%ti"};
-
+static char *bez[][2]={
+ {"chill","%cwc"},
+ {"city","%lc"},
+ {"country","%lR"},
+ {"current code","%cc"},
+ {"current date","%cd"},
+ {"current image","%ci"},
+ {"current temp","%ct"},
+ {"current text","%cm"},
+ {"direction","%cwd"},
+ {"humidity","%hu"},
+ {"latitude","%la"},
+ {"longitude","%lo"},
+ {"pressure","%pr"},
+ {"region","%lr"},
+ {"rising","%ri"},
+ {"speed","%cws"},
+ {"sunrise","%sr"},
+ {"sunset","%ss"},
+ {"tomorrow code","%tc"},
+ {"tomorrow date","%tD"},
+ {"tomorrow day","%td"},
+ {"tomorrow image","%ti"},
+ {"tomorrow temp high","%tth"},
+ {"tomorrow temp low","%ttl"},
+ {"tomorrow text","%tm"},
+ {"visibility","%vi"}
+};
 
 /**
  * fetching infos of buffer and copying it into array
  */
 void parsing_infos(char **weather,char *input_buffer) {
  char *line[80];
- unsigned int i=0;
+ char *itarator=NULL;
  unsigned short int counter=0;
 
- line[0]=strtok(input_buffer,"=");
- while(line[i]) {
-  line[++i]=strtok(NULL,"=");
-  strdelsp(line[i]);
+ itarator=strstr(input_buffer,"\n\r")+2;
+
+ line[counter]=strtok(itarator,"=");
+ while(line[counter-1]) {
+  line[counter]=strtok(NULL,"=");
+  strdelsp(line[counter]);
+  counter++;
  }
 
- for(;counter<26;++counter)  {
-  weather[counter]=malloc(strlen(line[3+counter])*sizeof(char));
-  memcpy(weather[counter],line[3+counter],strlen(line[3+counter])+1);
+ counter=0;
+ for(;counter<26;++counter) {
+  weather[counter]=malloc(strlen(line[counter])*sizeof(char));
+  memcpy(weather[counter],line[counter],strlen(line[counter])+1);
  }
 }
 
@@ -115,28 +137,37 @@ void gen_output(char **weather,unsigned short int *flags,char **format_code) {
  char *buffer=NULL;
  unsigned short int counter;
 
- if(*flags&BIT3) symlinking_image(weather[11]);
+ if(*flags&BIT3) symlinking_image(weather[5]);
 
- if(*flags&BIT2) strmcat(&buffer,*format_code);
+ if(*flags&BIT2) {
+	strmcat(&buffer,*format_code);
+	while(strreplace(&buffer,"\\n","\n"));
+ }
+
+
  else if(*flags&BIT1) { // short
-  strmcat(format_code,"%lc\n%cm, %ctC°\nWind: %cws, %cwd°\n\nForecats:\n%tT\n\
+  strmcat(format_code,"%lc\n%cm, %ctC°\nWind: %cws, %cwd°\n\nForecats:\n%tm\n\
 Temp: min %ttlC°, max %tthC°\n");
   strmcat(&buffer,*format_code);
- } else { // std long output
+ }
+
+ else { // std long output
   counter=0;
   for(;counter<26;++counter) {
-   char *tmp="%1 : %2\n";
-   strreplace(&tmp,"%1",bez[counter]);
-   strreplace(&tmp,"%2",format[counter]);
+   char *tmp=NULL;
+   strmcat(&tmp,"%1 : %2\n");
+   strreplace(&tmp,"%1",bez[counter][0]);
+   strreplace(&tmp,"%2",bez[counter][1]);
    strmcat(&buffer,tmp);
    free(tmp);
   }
  }
 
+
  // inserting Weatherstats
  counter=0;
  for(;counter<26;++counter)
-   strreplace(&buffer,format[counter],weather[counter]);
+   strreplace(&buffer,bez[counter][1],weather[counter]);
 
  outplain(buffer);
  free(buffer);
@@ -145,9 +176,9 @@ Temp: min %ttlC°, max %tthC°\n");
 
 int main(int argc,char **argv) {
  SOCKET sock;                 // vars for server communication
- BUFFER buffer;
+ BUFFER buffer=NULL;
  char *gmxxcode=NULL;         // vars for optionhandling
- char *server_name;
+ char *server_name=NULL;
  char *format_code=NULL;
  unsigned short int flags=0;
  int opt;
@@ -162,10 +193,10 @@ int main(int argc,char **argv) {
    case 'l':
     flags|=BIT3;break;
    case 'v':
-    showVersion(APP_NAME,APP_VERSION);exit(0);
+    showversion(APP_NAME,APP_VERSION);exit(0);
    case 'h':
    default:
-    showHelp(APP_NAME,APP_HELP);
+    showhelp(APP_NAME,APP_HELP);
     exit(0);
   }
  }
@@ -193,15 +224,16 @@ int main(int argc,char **argv) {
  buffer="GET /?id=%d HTTP/1.1\r\nHost: %h\r\nConnection: close\r\n\r\n\0";
  strreplace(&buffer,"%d",gmxxcode);
  strreplace(&buffer,"%h",server_name);
- free(gmxxcode);
+ if(gmxxcode!=NULL) free(gmxxcode);
 
- openSock(&sock,server_name,"80");
- send_split(&sock,&buffer);
- recv_split(&sock,&buffer);
- closeSocket(&sock);
+ opensocket(&sock,server_name,"80");
+ sendsplit(&sock,&buffer);
+ recvsplit(&sock,&buffer);
+ closesocket(&sock);
 
  parsing_infos(weather,buffer);
  gen_output(weather,&flags,&format_code);
- free(buffer);
+ if(buffer!=NULL) free(buffer);
+ if(format_code!=NULL) free(format_code);
  exit(0);
 }

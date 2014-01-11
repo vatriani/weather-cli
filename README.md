@@ -50,6 +50,6 @@ FORMAT: example
 %tD	tomorrow date
 %ttl	tomorrow temp low
 %tth	tomorrow temp high
-%tT	tomorrow text
+%tm	tomorrow text
 %tc	tomorrow code
 %ti	tomorrow image
