@@ -5,15 +5,15 @@ cli programm for linux, it's speak to weather.tuxnet24.de to grab
 actual weather informations
 
 
-for database enable in weather-cli.c uncomment #define DBASE
+#Compile:
 
-Compile:
-make
+    make
 
 Install (to use symlinking actual weather icon):
-make install
 
-Usage:
+    make install
+
+#Usage:
 weather-cli  for Linux, BSD and Windows
 use: weather-cli gmxxXXXX [OPTION]
 
