@@ -1,6 +1,6 @@
 /*
- * output.c - define some easy fuctions
- * Copyright © 2013 - Niels Neumann  <vatriani.nn@googlemail.com>
+ * common_output.c - define some easy fuctions
+ * Copyright © 2014 - Niels Neumann  <vatriani.nn@googlemail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,43 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __OUTPUT_H__
-#define __OUTPUT_H__
-
-#include <unistd.h>
-#include <string.h>
+#include "output.h"
 #include <stdlib.h>
 
 
-/**
- * __DATE__ support over Makefile CFLAGS=-DDATE="\"`date +'%Y'`\""
- */
-#ifndef __DATE__
- #define __DATE__ "2013"
-#endif
-
-/**
- * set some usable color codes
- */
 #ifdef COLOR
- #define CSI_RED     "\x1b[31;1m"
- #define CSI_GREEN   "\x1b[32;1m"
- #define CSI_YELLOW  "\x1b[33;1m"
- #define CSI_BLUE    "\x1b[34;1m"
- #define CSI_MAGENTA "\x1b[35;1m"
- #define CSI_CYAN    "\x1b[36;1m"
- #define CSI_RESET   "\x1b[0m"
-#endif
-
-// some wrapper function for write to stdout
-void outplain(char *tmp) {write(1,tmp,strlen(tmp));}
-
-// some wrapper function for write to stderr
-void outplainerr(char *tmp) {write(2,tmp,strlen(tmp));}
-
-
-#ifdef COLOR
-void styledoutput(char *type, char *mesg, char *color) {
+void styledOutput(char *type, char *mesg, char *color) {
  outplain("[");
  outplain(color);
  outplain(type);
@@ -62,7 +31,7 @@ void styledoutput(char *type, char *mesg, char *color) {
  outplain("\n");
 }
 #else
-void styledoutput(char *type, char *mesg) {
+void styledOutput(char *type, char *mesg) {
  outplain("[");
  outplain(type);
  outplain("]");
@@ -75,9 +44,9 @@ void styledoutput(char *type, char *mesg) {
 // extended wrapper for write to stderr with colors
 void outerr(char *tmp) {
 #ifdef COLOR
- styledoutput("err",tmp,CSI_RED);
+ styledOutput("err",tmp,CSI_RED);
 #else
- styledoutput("err",tmp);
+ styledOutput("err",tmp);
 #endif
 }
 
@@ -104,37 +73,40 @@ void outedeb(char *msg,char *content) {
 }
 #endif
 
-void outstat(char *tmp) {
- outplain("  =>  ");
- outplain(tmp);
- outplain("\n");
-}
 
+void outstat(char *tmp) {
+	outplain("  =>  ");
+	outplain(tmp);
+	outplain("\n");
+}
 
 /**
  * output programname -h for help message
  */
-extern void showhelp(char *app_name, char *app_help) {
- outplain(app_name);
- outplain("  for Linux, BSD and Windows\nuse: ");
- outplain(app_name);
- outplain(" ");
- outplain(app_help);
- outplain("\n\n");
+void showHelp(char *app_name, char *app_help) {
+	char *buffer = NULL;
+
+	strmcat(&buffer, "%1  for Linux, BSD and Windows\nuse: %1 %2\n\n");
+	strmreplace(&buffer,"%1",app_name);
+	strmreplace(&buffer,"%1",app_name);
+	strmreplace(&buffer,"%2",app_help);
+	outplain(buffer);
+	free(buffer);
 }
 
 /**
  * output programname -v for version message
  */
-extern void showversion(char *app_name, char *app_version) {
- outplain(app_name);
- outplain(" ");
- outplain(app_version);
- outplain("\nCopyright (C) ");
- outplain(__DATE__);
- outplain(" Niels Neumann  <vatriani.nn@googlemail.com\n\
+void showVersion(char *app_name, char *app_version) {
+	char *buffer = NULL;
+
+	strmcat(&buffer, "%1 %2\nCopyright (C) %3 Niels Neumann  <vatriani.nn@googlemail.com\n\
 License GPLv3+: GNU GPL Version 3 or later <http://gnu.org/licenses/gpl.html>.\
  \nThis is free software: you are free to change and redistribute it.\
  \nThere is NO WARRANTY, to the extent permitted by law.\n\n");
+	strmreplace(&buffer,"%1",app_name);
+	strmreplace(&buffer,"%2",app_version);
+	strmreplace(&buffer,"%3",__DATE__);
+	outplain(buffer);
+	free(buffer);
 }
-#endif

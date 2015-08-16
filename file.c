@@ -1,6 +1,6 @@
 /*
  * file.c - for file, config and cache handling
- * Copyright © 2013 - Niels Neumann  <vatriani.nn@googlemail.com>
+ * Copyright © 2014 - Niels Neumann  <vatriani.nn@googlemail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,61 +16,229 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __FILE_H__
-#define __FILE_H__
+
+#ifndef __STRING_H__
+#include "string.h"
+#endif
 
 #ifndef __OUTPUT_H__
- #include "output.c"
+#include "output.h"
 #endif
+
+#include "file.h"
 
 #include <sys/stat.h>
-#include <dirent.h>
+#include <sys/types.h>
+#include <sys/dir.h>
 #include <pwd.h>
-#include <string.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
-static void getUserPath(char **path) {
- struct passwd *userInformations;
- int len;
 
- userInformations=getpwuid(getuid());
- len=strlen(userInformations->pw_dir)+1;
- *path=malloc(len);
- memcpy(*path,userInformations->pw_dir,len);
+
+void getUserPath(char **path) {
+	struct passwd *userInformations;
+	int len;
+
+	userInformations = getpwuid(getuid());
+	len = strmlen(userInformations->pw_dir);
+	*path = malloc(++len);
+	memcpy(*path, userInformations->pw_dir, len+1);
 }
 
-static void createPathIfNotExists(char **path) {
- DIR *tmp;
- tmp=opendir(*path);
- if(tmp==NULL)
-  mkdir(*path,0700);
- else closedir(tmp);
+
+
+void createPathIfNotExists(char **path) {
+	DIR *tmp;
+	tmp = opendir(*path);
+	if(tmp == NULL)
+		mkdir(*path, 0700);
+	else
+		closedir(tmp);
 }
 
-extern void getConfigPath(char **path,char *app_name) {
- getUserPath(path);
- if(strlen(*path)!=0) {
-  strmcat(path,"/.config/");
-  strmcat(path,app_name);
-  strmcat(path,"/");
-  createPathIfNotExists(path);
- }
+
+
+void getConfigHome(char **path) {
+	char *configHome = getenv("XDG_CONFIG_HOME");
+	if(configHome)
+		strmcat(path,configHome);
+	else {
+		getUserPath(path);
+		strmcat(path,"/.config");
+	}
 }
 
-extern void getCachePath(char **path,char *app_name) {
- getUserPath(path);
- if(strlen(*path)!=0) {
-  strmcat(path,"/.cache/");
-  strmcat(path,app_name);
-  strmcat(path,"/");
-  createPathIfNotExists(path);
- }
+
+
+void getConfigApp(char **path, char *app_name) {
+	getConfigHome(path);
+	if(*path) {
+		strmcat(path, "/");
+		strmcat(path, app_name);
+	}
 }
 
-/*
-void loadConfig(char **path) {
+
+
+void getCacheHome(char **path) {
+	char *cacheHome = getenv("XDG_CACHE_HOME");
+	if(cacheHome)
+		strmcat(path,cacheHome);
+	else {
+		getUserPath(path);
+		strmcat(path,"/.cache");
+	}
 }
 
-void saveConfig(char **path) {
+
+
+void getCacheApp(char **path, char *app_name) {
+	getCacheHome(path);
+	if(*path) {
+		strmcat(path,"/");
+		strmcat(path,app_name);
+	}
 }
-*/
-#endif
+
+
+
+void getCachePath(char **path, char *app_name) {
+	getCacheApp(path,app_name);
+	if(*path) {
+		createPathIfNotExists(path);
+	}
+}
+
+
+
+void openFileForWrite(FILEHANDLER *file, char* name) {
+	*file = open(name,O_CREAT|O_WRONLY|O_TRUNC,S_IRUSR|S_IWUSR);
+
+	if(*file == 0)
+		outerr("error by opening file");
+}
+
+
+int openFileForRead(FILEHANDLER *file, char* name) {
+	*file = open(name, O_RDONLY);
+
+	if(*file == 0) {
+		outerr("error by opening file");
+		return 0;
+	}
+	return 1;
+}
+
+
+
+void closeFile(FILEHANDLER *file) {
+	if(close(*file) != 0)
+		outerr("error by file closing\n");
+}
+
+
+
+void writeToFile(FILEHANDLER *file, char* bytes) {
+	if(write(*file,bytes,strmlen(bytes)) <= 0)
+		outerr("error by file writing\n");
+}
+
+void writeNToFile(FILEHANDLER *file, char* bytes, unsigned int len) {
+	if(write(*file,bytes,len) <= 0)
+		outerr("error by file writing\n");
+}
+
+char* readFromFile(FILEHANDLER *file) {
+	char* returnString = NULL;
+	char buffer[BUFSIZ+1];
+	int actualSize;
+
+
+	while((actualSize = read(*file, (void*)buffer, BUFSIZ))) {
+		if(actualSize==-1) {
+			outerr("couldn't read from file\n");
+			return NULL;
+		}
+		buffer[actualSize]=0;
+		strmcat(&returnString, buffer);
+	}
+
+	return returnString;
+}
+
+
+
+void dirWalk(char *dir, void (*fcn)(char *))
+{
+	char *name = NULL;
+	struct dirent *dp;
+	DIR *dfd;
+
+	if ((dfd = opendir(dir)) == NULL) {
+		outerr("dirWalk: can't open");
+		return;
+	}
+
+	while ((dp = readdir(dfd)) != NULL) {
+		if (strmcmp(dp->d_name, ".") == 0 || strmcmp(dp->d_name, "..") == 0)
+			continue;
+
+		if (strmlen(dir) + strmlen(dp->d_name)+1 > MAX_PATH)
+			outerr("name too long\n");
+		else {
+			char* separator = strmrchr(dir,'/');
+
+			if(&dir[strmlen(dir)-1] != separator){
+				strmcat(&name, dir);
+				strmcat(&name, "/");
+			}
+
+			strmcat(&name, dp->d_name);
+			(*fcn)(name);
+			freeChar(&name);
+		}
+	}
+	closedir(dfd);
+}
+
+
+
+void dirWalkR(char *dir, void (*fcn)(char *,int))
+{
+	char *name = NULL;
+	struct dirent *dp;
+	DIR *dfd;
+
+	if ((dfd = opendir(dir)) == NULL) {
+		outerr("dirWalk: can't open");
+		return;
+	}
+
+	while ((dp = readdir(dfd)) != NULL) {
+		if (strmcmp(dp->d_name, ".") == 0 || strmcmp(dp->d_name, "..") == 0)
+			continue;
+
+		if (strmlen(dir)+strmlen(dp->d_name)+1 > MAX_PATH)
+			outerr("name too long\n");
+		else {
+			char* separator = strmrchr(dir,'/');
+
+			if(&dir[strmlen(dir)-1] != separator){
+				strmcat(&name, dir);
+				strmcat(&name, "/");
+			}
+
+			strmcat(&name, dp->d_name);
+
+			if(dp->d_type == DT_DIR) {
+				(*fcn)(name,0);
+				dirWalkR(name, fcn);
+			} else
+				(*fcn)(name,1);
+
+			freeChar(&name);
+		}
+	}
+	closedir(dfd);
+}
